@@ -1,0 +1,15 @@
+{
+ "source-directory":"src/images",
+ "input-image":"src/images/apple.jpg",
+ "output-directory":"src/output",
+ "device":"cuda",
+ "model-name":"jinaai/jina-clip-v2",
+ "dimension":1024,
+ "resize-width":960,
+ "resize-height":540,
+ "postgres-host":"localhost",
+ "postgres-port":15432,
+ "postgres-user":"postgres",
+ "postgres-password":"postgres",
+ "postgres-database":"postgres"
+}
