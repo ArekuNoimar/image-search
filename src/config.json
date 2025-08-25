@@ -1,6 +1,7 @@
 {
  "source-directory":"src/images",
- "input-image":"src/images/apple.jpg",
+ "input-image":"apple.jpg",
+ "processed-directory":"src/processed",
  "output-directory":"src/output",
  "device":"cuda",
  "model-name":"jinaai/jina-clip-v2",
