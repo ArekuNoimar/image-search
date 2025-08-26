@@ -2,12 +2,12 @@
 
 ## 概要
 
-このリポジトリはコサイン類似度を利用した画像検索システムです。
+参照画像を前処理して正規化 + CLIPモデルでベクトル化し、コサイン類似度を利用して画像検索を実施するシステムです
 
 システムの主なフローは下記の通りです:
 
 - 任意ディレクトリに存在する画像をフォーマット変換・リサイズ・ベクトル化してPostgreSQLへ登録
-- PostgreSQL登録済みベクトルとコサイン類似度検索を実行
+- 入力画像をベクトル化してPostgreSQL登録済みベクトルとコサイン類似度検索を実行
 - 検索結果のうち最も類似度の高い画像を特定ディレクトリに出力
 
 ## リポジトリの構成
@@ -15,22 +15,16 @@
 ```bash
 image-search/
 ├── README.md
-├── apple.jpg                     # サンプルの入力データ
+├── sample-apple.jpg              # サンプルの入力データ
 ├── docker-compose.yml            # PostgreSQL設定
 ├── pyproject.toml                # Python依存関係
-├── demo.py                       # デモ実行ファイル
-├── test_basic.py                 # 基本機能テスト
-├── test_integration.py           # 統合テスト
-├── test_interactive.py           # インタラクティブテスト
-├── test_multiple_search.py       # 複数検索最適化テスト
-├── test_signal_handling.py       # シグナルハンドリングテスト
 ├── src/
 │   ├── config.json               # 設定ファイル
 │   ├── db.py                     # データベース操作クラス・関数
 │   ├── images/                   # 元画像保存ディレクトリ
-│   │   ├── apple-2.jpg
-│   │   ├── banana.jpg
-│   │   ├── grapes.jpg
+│   │   ├── apple.webp
+│   │   ├── banana.png
+│   │   ├── grapes.jpeg
 │   │   └── strawberry.jpg
 │   ├── processed/                # 処理済み画像ディレクトリ（自動生成）
 │   ├── main.py                   # メイン実行ファイル
@@ -41,9 +35,25 @@ image-search/
 
 ## 前提条件
 
-- Python 3.12+
-- Docker / Docker Compose
-- uv (Python パッケージマネージャ)
+- Python 3x
+- UV  
+- Docker  
+- Nvidia-Driver, Nvidia-Cuda-Toolkit, Nvidia-Container-Toolkit  
+
+## 動作確認済環境
+
+### 環境情報（表形式）
+
+| 項目 | 値 |
+|---|---|
+| OS | Ubuntu 22.04.5 Desktop LTS |
+| GPU | Nvidia GeForce RTX 4090 Laptop 16GB |
+| UV | 0.8.4 |
+| Python | 3.12.3 |
+| Docker | 28.32 |
+| Nvidia Driver | 575.51.03 |
+| Nvidia CUDA Toolkit | 12.9 |
+| Nvidia Container Toolkit | 1.18.0 |
 
 ## 初期設定
 
@@ -60,8 +70,8 @@ docker compose up -d
 # ディレクトリ移動
 cd image-search
 
-# Python 3.12の仮想環境を作成
-uv venv --python 3.12
+# Python 3.12.3の仮想環境を作成
+uv venv --python 3.12.3
 
 # 仮想環境の有効化
 source .venv/bin/activate
@@ -79,7 +89,7 @@ uv sync
 uv run src/main.py --env src/config.json
 
 # 特定画像での検索実行
-uv run src/main.py --env src/config.json --search apple.jpg
+uv run src/main.py --env src/config.json --search sample-apple.jpg
 
 # 参照画像の処理のみ実行
 uv run src/main.py --env src/config.json --process-only
@@ -88,27 +98,14 @@ uv run src/main.py --env src/config.json --process-only
 uv run src/main.py --env src/config.json --no-cleanup
 ```
 
-### テスト実行
+## 利用可能オプション
 
-```bash
-# 基本機能テスト
-python test_basic.py
-
-# 統合テスト
-python test_integration.py
-
-# 複数検索最適化テスト
-python test_multiple_search.py
-
-# インタラクティブテスト
-python test_interactive.py
-
-# シグナルハンドリングテスト
-python test_signal_handling.py
-
-# デモ実行
-python demo.py
-```
+| オプション | 説明 | 型/値 | 既定値 | 例 |
+|---|---|---|---|---|
+| `--env` | 設定ファイルのパス | 文字列 | `src/config.json` | `--env src/config.json` |
+| `--process-only` | 参照画像の処理のみ実行 | フラグ | `false` | `--process-only` |
+| `--search` | 指定されたファイルと類似した画像を検索 | 文字列（画像パス） | なし | `--search sample-apple.jpg` |
+| `--no-cleanup` | 終了時のデータベースクリーンアップを無効化 | フラグ | `false` | `--no-cleanup` |
 
 ## 設定ファイル
 
@@ -122,8 +119,8 @@ python demo.py
   "device": "cuda",                          // 計算デバイス（cpu/cuda）
   "model-name": "jinaai/jina-clip-v2",       // 使用モデル名
   "dimension": 1024,                         // 埋め込みベクトル次元数
-  "resize-width": 960,                       // リサイズ時の画像横幅
-  "resize-height": 540,                      // リサイズ時の画像縦幅
+  "resize-width": 1000,                       // リサイズ時の画像横幅
+  "resize-height": 800,                      // リサイズ時の画像縦幅
   "postgres-host": "localhost",              // PostgreSQLホスト
   "postgres-port": 15432,                    // PostgreSQLポート
   "postgres-user": "postgres",               // PostgreSQLユーザー名
@@ -164,9 +161,39 @@ yyyymmdd-hhmmss/
 - **einops**: テンソル操作
 - **timm**: 画像モデルライブラリ
 
+## DBテーブル
+
+PostgreSQL で作成されるテーブル: `image_embeddings`
+
+| カラム名 | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | SERIAL | PRIMARY KEY | 自動採番 ID |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | レコード作成時刻 |
+| file_path | TEXT | NOT NULL | 画像のフルパス（処理済み） |
+| file_name | TEXT | NOT NULL | 画像ファイル名 |
+| file_hash | TEXT | UNIQUE NOT NULL | 画像内容のMD5ハッシュ（重複排除に使用） |
+| embedding | REAL[] | NOT NULL | 画像の埋め込みベクトル（例: 1024次元） |
+
+例（1レコード）
+
+| カラム名 | 例 |
+|---|---|
+| id | 1 |
+| created_at | 2025-01-01 12:34:56 |
+| file_path | src/processed/apple.jpg |
+| file_name | apple.jpg |
+| file_hash | 098f6bcd4621d373cade4e832627b4f6 |
+| embedding | [0.0123, -0.4567, 0.0890, ..., 0.0345] |
+
+補足
+
+- `embedding` は Python 側から `list[float]` として挿入されます（`REAL[]`）。
+- ベクトル次元は使用モデルに依存します（例: `config.json` の `dimension`: 1024）。
+- 重複登録は `file_hash`（MD5）で防止しています。
+
 ## システム動作フロー
 
-### 初回実行時（参照画像処理）
+### 初回実行時（参照画像前処理）
 1. **設定読み込み**: config.jsonから各種設定を取得
 2. **画像前処理**: 
    - `source-directory` 内の.jpeg/.png/.webp画像を検出
@@ -190,8 +217,7 @@ yyyymmdd-hhmmss/
 ### インタラクティブ検索時（最適化）
 7. **連続検索最適化**:
    - モデルを1回のみ読み込み、メモリに保持
-   - 2回目以降の検索で参照画像処理をスキップ
-   - 高速な検索処理を実現（約44%の高速化）
+   - 2回目以降の検索で参照画像前処理をスキップ
 
 ### 終了時
 8. **自動クリーンアップ**:
@@ -199,7 +225,7 @@ yyyymmdd-hhmmss/
    - 異常終了時: シグナルハンドラーによるクリーンアップ
    - `--no-cleanup` オプションでクリーンアップを無効化可能
 
-## 新機能・最適化
+## 機能・最適化
 
 ### 処理済み画像の分離保存
 - **元画像保護**: `source-directory` の元画像ファイルはそのまま保持
@@ -208,18 +234,15 @@ yyyymmdd-hhmmss/
 
 ### 複数検索最適化
 - **モデル再利用**: インタラクティブモードで同一モデルインスタンスを再利用
-- **高速化実現**: 2回目以降の検索で約44%の高速化を達成
-- **参照画像処理スキップ**: 連続検索時は参照画像の前処理を省略
+- **参照画像前処理スキップ**: 連続検索時は参照画像の前処理を省略
 
 ### 自動データベースクリーンアップ
 - **正常終了時**: プログラム終了時に自動でデータベースをクリーンアップ
 - **異常終了対応**: Ctrl+C等での強制終了時もクリーンアップを実行
 - **オプション制御**: `--no-cleanup` フラグでクリーンアップを無効化可能
 
-### GPU対応・パフォーマンス最適化
+### GPU対応
 - **CUDA自動検出**: GPU利用可能時は自動でCUDA使用
-- **BFloat16対応**: GPU使用時のテンソル型エラーを修正
-- **高速処理**: RTX 4090での最適化済み動作確認
 
 ## 注意事項
 
@@ -271,3 +294,115 @@ uv sync --reinstall
 # 特定のパッケージが不足している場合
 pip install einops timm torchvision
 ```  
+
+## 環境構築
+
+### UVインストール方法(Ubuntu)
+
+```bash
+# インストール
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# バージョン確認
+uv --version
+```
+
+### Dockerインストール(Ubuntu)
+
+[Docker](https://docs.docker.com/engine/install/ubuntu/)より参照
+
+```bash
+# GPGキーの追加
+sudo apt-get update
+
+sudo apt-get install ca-certificates curl
+
+sudo install -m 0755 -d /etc/apt/keyrings
+
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# apt設定
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+```
+
+```bash
+# パッケージのインストール
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+```bash
+# 権限変更
+sudo groupadd docker
+
+sudo usermod -aG docker $USER
+```
+
+## Nvidia-Driver, Nvidia-Cuda-Toolkitインストール(Ubuntu22系)(ver 12.9)
+
+[CUDA Toolkit 12.9 Downloads](https://developer.nvidia.com/cuda-12-9-0-download-archive)より参照
+
+```bash
+# CUDA Toolkit インストール
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
+sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
+wget https://developer.download.nvidia.com/compute/cuda/12.9.0/local_installers/cuda-repo-ubuntu2204-12-9-local_12.9.0-575.51.03-1_amd64.deb
+sudo dpkg -i cuda-repo-ubuntu2204-12-9-local_12.9.0-575.51.03-1_amd64.deb
+sudo cp /var/cuda-repo-ubuntu2204-12-9-local/cuda-*-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get -y install cuda-toolkit-12-9
+```
+
+```bash
+# Nvidia-Driver　インストール
+sudo apt-get install -y nvidia-open
+```
+
+### Nvidia-Container-Toolkitインストール
+
+[Installing the NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)より参照
+
+```bash
+# Nvidia Container Toolkitのgpgキー追加、aptリポジトリ設定
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+  && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update
+```
+
+```bash
+# パッケージのインストール
+export NVIDIA_CONTAINER_TOOLKIT_VERSION=1.17.8-1
+  sudo apt-get install -y \
+      nvidia-container-toolkit=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      nvidia-container-toolkit-base=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      libnvidia-container-tools=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      libnvidia-container1=${NVIDIA_CONTAINER_TOOLKIT_VERSION}
+```
+
+```bash
+# サービス設定ファイル追加
+sudo touch  /etc/docker/daemon.json
+
+sudo vim /etc/dcker/daemon.json
+```
+
+```json
+{
+  "runtimes": {
+    "nvidia": {
+      "path": "nvidia-container-runtime",
+      "runtimeArgs": []
+    }
+  },
+  "default-runtime": "nvidia"
+}
+```

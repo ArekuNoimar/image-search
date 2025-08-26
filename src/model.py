@@ -179,7 +179,7 @@ def process_images_in_directory(source_dir: str, processed_dir: str, resize_widt
             filename = os.path.basename(image_path)
             name, _ = os.path.splitext(filename)
             temp_jpg_path = os.path.join(processed_dir, f"{name}_temp.jpg")
-            final_path = os.path.join(processed_dir, f"{name}_processed.jpg")
+            final_path = os.path.join(processed_dir, f"{name}.jpg")
             
             if convert_to_jpg(image_path, temp_jpg_path):
                 if resize_image(temp_jpg_path, final_path, resize_width, resize_height):
